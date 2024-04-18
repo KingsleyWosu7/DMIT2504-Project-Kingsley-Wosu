@@ -33,6 +33,7 @@ class NotesHomePage extends StatefulWidget {
 
 class _NotesHomePageState extends State<NotesHomePage> {
   late Future<List<Note>> _notes;
+  TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
@@ -40,41 +41,76 @@ class _NotesHomePageState extends State<NotesHomePage> {
     _notes = DatabaseHelper.instance.readAllNotes();
   }
 
+  void _searchNotes() {
+    setState(() {
+      _notes = DatabaseHelper.instance.searchNotes(searchController.text);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        actions: <Widget>[
+          IconButton(
+            icon: Icon(Icons.search),
+            onPressed: _searchNotes,
+          ),
+        ],
       ),
-      body: FutureBuilder<List<Note>>(
-        future: _notes,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasData) {
-              return ListView.builder(
-                itemCount: snapshot.data!.length,
-                itemBuilder: (context, index) {
-                  Note note = snapshot.data![index];
-                  return ListTile(
-                    title: Text(note.title),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => NotePage(note: note)),
-                      );
-                      setState(() {
-                        _notes = DatabaseHelper.instance.readAllNotes(); // Refresh notes after edit
-                      });
-                    },
-                  );
-                },
-              );
-            } else if (snapshot.hasError) {
-              return Center(child: Text('Error loading notes'));
-            }
-          }
-          return Center(child: CircularProgressIndicator());
-        },
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                labelText: "Search Notes",
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.clear),
+                  onPressed: () {
+                    searchController.clear();
+                    _searchNotes();
+                  },
+                ),
+              ),
+              onSubmitted: (value) => _searchNotes(),
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<Note>>(
+              future: _notes,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  if (snapshot.hasData) {
+                    return ListView.builder(
+                      itemCount: snapshot.data!.length,
+                      itemBuilder: (context, index) {
+                        Note note = snapshot.data![index];
+                        return ListTile(
+                          title: Text(note.title),
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => NotePage(note: note)),
+                            );
+                            setState(() {
+                              _notes = DatabaseHelper.instance.readAllNotes();
+                            });
+                          },
+                        );
+                      },
+                    );
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text('Error loading notes'));
+                  }
+                }
+                return Center(child: CircularProgressIndicator());
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -83,7 +119,7 @@ class _NotesHomePageState extends State<NotesHomePage> {
             MaterialPageRoute(builder: (context) => NotePage(note: Note(title: '', body: ''))),
           );
           setState(() {
-            _notes = DatabaseHelper.instance.readAllNotes(); // Refresh notes after adding new
+            _notes = DatabaseHelper.instance.readAllNotes();
           });
         },
         tooltip: 'Add Note',

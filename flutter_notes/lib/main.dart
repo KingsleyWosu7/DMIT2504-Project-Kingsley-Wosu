@@ -50,53 +50,40 @@ class _NotesHomePageState extends State<NotesHomePage> {
         future: _notes,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasError) {
-              // Displaying error message if something goes wrong with loading notes
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
             if (snapshot.hasData) {
-              List<Note> notes = snapshot.data!;
-              if (notes.isEmpty) {
-                // Displaying a message when there are no notes
-                return Center(child: Text('No notes found, add some!'));
-              }
               return ListView.builder(
-                itemCount: notes.length,
+                itemCount: snapshot.data!.length,
                 itemBuilder: (context, index) {
-                  Note note = notes[index];
+                  Note note = snapshot.data![index];
                   return ListTile(
                     title: Text(note.title),
-                    subtitle: Text(note.body, maxLines: 1, overflow: TextOverflow.ellipsis),
                     onTap: () async {
-                      // Navigating to NotePage to edit the selected note
                       await Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => NotePage(note: note)),
                       );
-                      // Refresh the list of notes after potentially updating a note
                       setState(() {
-                        _notes = DatabaseHelper.instance.readAllNotes();
+                        _notes = DatabaseHelper.instance.readAllNotes(); // Refresh notes after edit
                       });
                     },
                   );
                 },
               );
+            } else if (snapshot.hasError) {
+              return Center(child: Text('Error loading notes'));
             }
           }
-          // Showing a loading spinner while waiting for the notes to load
           return Center(child: CircularProgressIndicator());
         },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // Navigating to NotePage to create a new note
           await Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => NotePage(note: Note(title: '', body: ''))),
           );
-          // Refresh the list of notes after potentially adding a new note
           setState(() {
-            _notes = DatabaseHelper.instance.readAllNotes();
+            _notes = DatabaseHelper.instance.readAllNotes(); // Refresh notes after adding new
           });
         },
         tooltip: 'Add Note',
@@ -119,26 +106,27 @@ class NotePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(note.id == null ? 'New Note' : 'Edit Note'),
+        actions: [
+          if (note.id != null) // Only show the delete button if the note exists (has an ID)
+            IconButton(
+              icon: Icon(Icons.delete),
+              onPressed: () => _confirmDelete(context),
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
-          children: <Widget>[
+          children: [
             TextField(
               controller: titleController,
-              decoration: const InputDecoration(
-                hintText: 'Enter note title here...',
-              ),
+              decoration: const InputDecoration(hintText: 'Enter note title here...'),
             ),
-            Expanded(
-              child: TextField(
-                controller: bodyController,
-                decoration: const InputDecoration(
-                  hintText: 'Enter note text here...',
-                ),
-                keyboardType: TextInputType.multiline,
-                maxLines: null,
-              ),
+            TextField(
+              controller: bodyController,
+              decoration: const InputDecoration(hintText: 'Enter note text here...'),
+              keyboardType: TextInputType.multiline,
+              maxLines: null,
             ),
           ],
         ),
@@ -147,18 +135,42 @@ class NotePage extends StatelessWidget {
         onPressed: () async {
           note.title = titleController.text;
           note.body = bodyController.text;
-          // Saving the note to the database or updating it
           if (note.id == null) {
             await DatabaseHelper.instance.create(note);
           } else {
             await DatabaseHelper.instance.update(note);
           }
-          // Going back to the previous screen after saving the note
           Navigator.pop(context);
         },
         tooltip: 'Save Note',
         child: const Icon(Icons.save),
       ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirm"),
+          content: const Text("Are you sure you wish to delete this note?"),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                await DatabaseHelper.instance.delete(note.id!);
+                Navigator.of(context).pop(); // Close the dialog
+                Navigator.of(context).pop(); // Return to previous screen
+              },
+              child: const Text("Delete"),
+            ),
+          ],
+        );
+      },
     );
   }
 }
